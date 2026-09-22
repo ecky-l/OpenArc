@@ -41,7 +41,7 @@ OpenArc includes a command line tool for controlling the server.
 ## Concepts
 
 - [Tool and Reasoning Parsing](tool_use.md#tool-and-reasoning-parsing)
-- [Out-of-Process Inference Workers](worker-processes.md) — VLMs run in supervised worker subprocesses so unload/load always get a clean OpenVINO Core
+- [Out-of-Process Inference Workers](worker-processes.md) — VLM/LLM/Whisper run in supervised worker subprocesses so unload/load always get a clean OpenVINO Core
 
 
 ## Models

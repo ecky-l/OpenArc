@@ -17,7 +17,7 @@ from src.engine.openvino.qwen3_asr.qwen3_asr import OVQwen3ASR
 from src.engine.openvino.qwen3_tts.qwen3_tts import OVQwen3TTS
 from src.engine.optimum.optimum_emb import Optimum_EMB
 from src.engine.optimum.optimum_rr import Optimum_RR
-from src.engine.worker.worker_client import RemoteOVGenAI_VLM
+from src.engine.worker.worker_client import RemoteOVGenAI_LLM, RemoteOVGenAI_VLM, RemoteOVGenAI_Whisper
 from src.engine.worker.protocol import RemoteWorkerDeadError
 
 from src.server.schemas.modeling.contract_kokoro import OV_KokoroGenConfig
@@ -141,7 +141,7 @@ class InferWorker:
     """
 
     @staticmethod
-    async def infer_llm(packet: WorkerPacket, llm_instance: OVGenAI_LLM) -> WorkerPacket:
+    async def infer_llm(packet: WorkerPacket, llm_instance: Union[OVGenAI_LLM, RemoteOVGenAI_LLM]) -> WorkerPacket:
         """Generate text for a single packet using the OVGenAI_LLM pipeline"""
         metrics = None
         final_text = ""
@@ -211,7 +211,7 @@ class InferWorker:
         return packet
 
     @staticmethod
-    async def infer_whisper(packet: WorkerPacket, whisper_model: OVGenAI_Whisper) -> WorkerPacket:
+    async def infer_whisper(packet: WorkerPacket, whisper_model: Union[OVGenAI_Whisper, RemoteOVGenAI_Whisper]) -> WorkerPacket:
         """Transcribe audio for a single packet using the OVGenAI_Whisper pipeline.
 
         Note: Whisper pipeline operates non-streaming; this method processes the
@@ -391,7 +391,7 @@ class QueueWorker:
     """
 
     @staticmethod
-    async def queue_worker_llm(model_name: str, model_queue: asyncio.Queue, llm_model: OVGenAI_LLM, registry: ModelRegistry):
+    async def queue_worker_llm(model_name: str, model_queue: asyncio.Queue, llm_model: Union[OVGenAI_LLM, RemoteOVGenAI_LLM], registry: ModelRegistry):
         """Text model inference worker that processes packets from queue"""
         logger.info(f"[LLM Worker: {model_name}] Started, waiting for packets...")
         while True:
@@ -433,7 +433,7 @@ class QueueWorker:
             model_queue.task_done()
 
     @staticmethod
-    async def queue_worker_whisper(model_name: str, model_queue: asyncio.Queue, whisper_model: OVGenAI_Whisper, registry: ModelRegistry):
+    async def queue_worker_whisper(model_name: str, model_queue: asyncio.Queue, whisper_model: Union[OVGenAI_Whisper, RemoteOVGenAI_Whisper], registry: ModelRegistry):
         """Whisper model inference worker that processes packets from queue"""
         logger.info(f"[Whisper Worker: {model_name}] Started, waiting for packets...")
         while True:
@@ -620,7 +620,7 @@ class WorkerRegistry:
         instance = record.model_instance
 
         async with self._lock:
-            if mt == ModelType.LLM and isinstance(instance, OVGenAI_LLM):
+            if mt == ModelType.LLM and isinstance(instance, (OVGenAI_LLM, RemoteOVGenAI_LLM)):
                 if record.model_name not in self._model_queues_llm:
                     q: asyncio.Queue = asyncio.Queue()
                     self._model_queues_llm[record.model_name] = q
@@ -634,7 +634,7 @@ class WorkerRegistry:
                     task = asyncio.create_task(QueueWorker.queue_worker_vlm(record.model_name, q, instance, self._model_registry))
                     self._model_tasks_vlm[record.model_name] = task
 
-            elif mt == ModelType.WHISPER and isinstance(instance, OVGenAI_Whisper):
+            elif mt == ModelType.WHISPER and isinstance(instance, (OVGenAI_Whisper, RemoteOVGenAI_Whisper)):
                 if record.model_name not in self._model_queues_whisper:
                     q: asyncio.Queue = asyncio.Queue()
                     self._model_queues_whisper[record.model_name] = q
