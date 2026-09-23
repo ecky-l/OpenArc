@@ -7,7 +7,7 @@ icon: lucide/terminal
 
 After installation run ```openarc --help``` to see focused usage documentation inside the openarc command line tool.
 
-This page contains example commands to help you choose models and configure OpenArc. 
+This page contains example commands to help you choose models and configure OpenArc.
 
 === "add"
 
@@ -39,7 +39,7 @@ This page contains example commands to help you choose models and configure Open
           --device <target-device>
           --tool-call-parser <hermes> # text only models currently supported use hermes style in most cases
         ```
-    
+
     === "VLM"
 
         ```
@@ -51,7 +51,7 @@ This page contains example commands to help you choose models and configure Open
           --device <target-device>
           --tool-call-parser <hermes/qwen35/gemma4>
         ```
-    
+
     === "Whisper"
 
         ```
@@ -80,7 +80,7 @@ This page contains example commands to help you choose models and configure Open
 
         CPU and GPU device are supported.
 
-        When GPU is selected as device, part of the model still runs on CPU. 
+        When GPU is selected as device, part of the model still runs on CPU.
 
         Supported languages: `english`, `chinese`, `japanese`, `korean`, `german`, `french`, `spanish`, `italian`, `portuguese`, `russian`, `beijing_dialect`, `sichuan_dialect`. Pass `None` to auto-detect. See `demos/qwen3_tts_example.py` for a full request example.
 
@@ -399,7 +399,7 @@ This page contains example commands to help you choose models and configure Open
             * If the stored hash differs from the current one -- e.g. you changed `--runtime-config` / `--scheduler-config` / `--device` via `openarc add`, or edited `openarc_config.json` by hand -- OpenArc deletes the model's `--cache-dir` before loading, so the pipeline **recompiles with the new settings**, and writes the new hash back.
             * An unchanged load is a cache hit: nothing is deleted and the fast cached start is used.
 
-            The `config_hash` field is managed by the server; you can ignore (or safely delete) it, the next load re-stores it. A re-run of `openarc add` with an unchanged configuration keeps the stored hash, so it does not needlessly trigger a recompile.
+            The `config_hash` field is managed by the server; you can ignore (or safely delete) it, the next load re-stores it. A re-run of `openarc add` with an unchanged configuration keeps the stored hash, so it does not needlessly trigger a recompile. `worker_line_limit` (the inference-worker IPC line limit, see [Out-of-Process Inference Workers](worker-processes.md)) is excluded from the hash on purpose: it is an IPC setting, not a compilation setting, so changing it alone never triggers a recompile.
 
             A recompile is also forced **by hand**, independent of any configuration change:
 

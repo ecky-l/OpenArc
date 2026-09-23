@@ -154,6 +154,17 @@ def test_config_hash_ignores_the_hash_field_itself() -> None:
     assert compute_config_hash(a) == compute_config_hash(b)
 
 
+def test_config_hash_ignores_worker_line_limit() -> None:
+    """The IPC line limit is not a compilation setting: changing it alone must
+    not invalidate the compiled-model cache (no needless recompile)."""
+    base = compute_config_hash(_load_config())
+    assert compute_config_hash(_load_config(worker_line_limit=None)) == base
+    assert compute_config_hash(_load_config(worker_line_limit=65536)) == base
+    assert compute_config_hash(_load_config(worker_line_limit=2 * 1024**3)) == base
+    # ...but every other field still participates.
+    assert compute_config_hash(_load_config(runtime_config={"OFFLOAD_RATIO": 0.1})) != base
+
+
 # --- invalidate_compiled_model_cache -----------------------------------------
 
 
@@ -341,6 +352,7 @@ def test_register_load_stores_hash_on_first_load(
             return record
 
     record = asyncio.run(_run())
+    assert record.load_config is not None
 
     assert _read_entry(config_file, "reg-first")[CONFIG_HASH_KEY] == (
         compute_config_hash(record.load_config)

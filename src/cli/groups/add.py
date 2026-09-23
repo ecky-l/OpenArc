@@ -2,6 +2,7 @@
 Add command - Add a model configuration to the config file.
 """
 import json
+import re
 
 import click
 from pydantic import ValidationError
@@ -10,6 +11,18 @@ from src.server.schemas.modeling.contract_ovgenai_llm_and_vlm import SchedulerCo
 
 from ..main import cli, console
 from ..utils import validate_model_path
+
+_SIZE_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([KMGT])?i?B?\s*$", re.IGNORECASE)
+_SIZE_MULTIPLIERS = {"": 1, "K": 1024, "M": 1024**2, "G": 1024**3, "T": 1024**4}
+
+
+def _parse_size_bytes(value: str) -> int:
+    """Parse a size like '524288', '512K', '256MiB', '1G' into bytes."""
+    match = _SIZE_RE.match(value)
+    if not match:
+        raise ValueError(f"unrecognized size {value!r}")
+    number, suffix = match.groups()
+    return int(float(number) * _SIZE_MULTIPLIERS[(suffix or "").upper()])
 
 
 def _runtime_config_help_callback(ctx, _param, value):
@@ -116,8 +129,12 @@ def _scheduler_config_help_callback(ctx, _param, value):
     required=False,
     default=None,
     help='Model-level default max_tokens (max_new_tokens) applied when a request omits max_tokens. Bounds the output length for requests that do not specify one, avoiding the 16384 default and GPU OOM. An explicit client max_tokens always wins.')
+@click.option('--worker-line-limit', '--wll',
+    required=False,
+    default=None,
+    help='Maximum size of one line on the IPC pipe to this model\'s inference worker (ovgenai only). Bytes, or K/M/G suffix (e.g. 512K, 256M, 1G). Default 256 MiB. Requests with larger payloads fail with a clear error; lowering it bounds IPC memory. Does not trigger a recompile.')
 @click.pass_context
-def add(ctx, model_path, model_name, engine, model_type, device, runtime_config, scheduler_config, cache_dir, draft_model_path, draft_device, num_assistant_tokens, assistant_confidence_threshold, tool_call_parser, context_window, max_tokens):
+def add(ctx, model_path, model_name, engine, model_type, device, runtime_config, scheduler_config, cache_dir, draft_model_path, draft_device, num_assistant_tokens, assistant_confidence_threshold, tool_call_parser, context_window, max_tokens, worker_line_limit):
     """- Add a model configuration to the config file."""
 
     # Validate model path
@@ -188,18 +205,34 @@ def add(ctx, model_path, model_name, engine, model_type, device, runtime_config,
         load_config["context_window"] = context_window
     if max_tokens is not None:
         load_config["max_tokens"] = max_tokens
+    limit_bytes: int | None = None
+    if worker_line_limit is not None:
+        try:
+            limit_bytes = _parse_size_bytes(worker_line_limit)
+        except ValueError as e:
+            console.print(f"[red]Error parsing --worker-line-limit:[/red] {e}")
+            console.print('[yellow]Examples: \'268435456\', \'512K\', \'256M\', \'1G\'[/yellow]')
+            ctx.exit(1)
+    if limit_bytes is not None:
+        if limit_bytes < 65536:
+            console.print(f"[red]Error: --worker-line-limit must be at least 65536 bytes (64 KiB), got {limit_bytes}.[/red]")
+            ctx.exit(1)
+        load_config["worker_line_limit"] = limit_bytes
 
     # A re-add that does not change the configuration keeps the stored
     # config_hash, so the next load does not needlessly recompile. Any change
     # drops the hash (the entry is replaced), which makes the next load
     # invalidate the compiled-model cache and recompile -- see
     # src.server.utils.config_hash. The comparison uses the raw file entry, so
-    # the path strings compare exactly as typed.
+    # the path strings compare exactly as typed. worker_line_limit is ignored
+    # here, like in config_hash itself: it is an IPC setting, not a
+    # compilation setting, so changing it alone must not force a recompile.
+    ignored_keys = {"config_hash", "worker_line_limit"}
     previous_entry = ctx.obj.server_config.load_config().get("models", {}).get(model_name)
     if isinstance(previous_entry, dict):
         same_config = (
-            {k: v for k, v in previous_entry.items() if k != "config_hash"}
-            == {k: v for k, v in load_config.items() if k != "config_hash"}
+            {k: v for k, v in previous_entry.items() if k not in ignored_keys}
+            == {k: v for k, v in load_config.items() if k not in ignored_keys}
         )
         if same_config and previous_entry.get("config_hash"):
             load_config["config_hash"] = previous_entry["config_hash"]

@@ -201,6 +201,25 @@ class ModelLoadConfig(BaseModel):
         client max_tokens always takes precedence.
         """,
     )
+    worker_line_limit: Optional[int] = Field(
+        default=None,
+        ge=65536,
+        description="""
+        Maximum size, in bytes, of one line on the IPC pipe between the server
+        and this model's inference worker subprocess (ovgenai models only;
+        ignored by in-process engines).
+
+        A request whose JSON line exceeds the limit fails with a clear error
+        (the worker reports FATAL and the supervisor respawns it). When unset,
+        the protocol default of 256 MiB applies, which covers arbitrarily long
+        text conversations, dozens of images, and hours of audio. Lower it to
+        bound IPC memory on small machines or to reject oversized payloads;
+        raise it for very large single requests.
+
+        This is an IPC setting, not a compilation setting: changing it never
+        invalidates the compiled-model cache (it is excluded from config_hash).
+        """,
+    )
 
 
 class ModelUnloadConfig(BaseModel):

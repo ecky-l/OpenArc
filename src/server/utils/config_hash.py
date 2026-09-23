@@ -65,8 +65,14 @@ def compute_config_hash(load_config: ModelLoadConfig) -> str:
 
     The result is prefixed with the algorithm (``sha256:``) so the value is
     self-describing if the scheme ever changes.
+
+    ``worker_line_limit`` is also excluded: it configures the IPC pipe between
+    the server and the inference worker subprocess, not what OpenVINO compiles,
+    so changing it must not invalidate the compiled-model cache.
     """
-    payload = load_config.model_dump(mode="json", exclude={CONFIG_HASH_KEY})
+    payload = load_config.model_dump(
+        mode="json", exclude={CONFIG_HASH_KEY, "worker_line_limit"}
+    )
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return f"sha256:{digest}"
